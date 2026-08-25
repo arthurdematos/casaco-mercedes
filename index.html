@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Câmera</title>
+</head>
+
+<body>
+
+    <h1>Teste de câmera</h1>
+
+    <button id="iniciar">Iniciar câmera</button>
+    <button id="parar">Parar câmera</button>
+
+    <br><br>
+
+    <video id="video" autoplay playsinline width="350"></video>
+
+    <p id="status">Câmera desligada</p>
+
+    <script>
+        const video = document.getElementById("video");
+        const iniciar = document.getElementById("iniciar");
+        const parar = document.getElementById("parar");
+        const status = document.getElementById("status");
+
+        let stream = null;
+
+        iniciar.onclick = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
+
+                video.srcObject = stream;
+                status.textContent = "Câmera ativa";
+            } catch (erro) {
+                status.textContent = "Permissão da câmera recusada.";
+                console.error(erro);
+            }
+        };
+
+        parar.onclick = () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                status.textContent = "Câmera desligada";
+            }
+        };
+    </script>
