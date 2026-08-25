@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Câmera - PoC</title>
+    <title>Teste de Câmera</title>
 </head>
 
 <body>
 
-    <h1>Câmera</h1>
+    <h1>Teste de câmera</h1>
 
-    <p id="status">Conectando...</p>
+    <p id="status">Aguardando permissão...</p>
 
     <video
         id="video"
@@ -21,106 +21,9 @@
     </video>
 
     <script>
-
         const video = document.getElementById("video");
         const status = document.getElementById("status");
 
-        // Conecta ao servidor de sinalização
-        const socket = new WebSocket(
-            "ws://" + window.location.host
-        );
-
-        const conexao = new RTCPeerConnection();
-
-        // Quando conectar ao servidor
-        socket.onopen = async () => {
-
-            status.textContent =
-                "Conectado. Aguardando o painel...";
-
-            socket.send(JSON.stringify({
-                tipo: "camera"
-            }));
-
-            iniciarCamera();
-        };
-
-
-        // Recebe mensagens do painel/servidor
-        socket.onmessage = async (evento) => {
-
-            const mensagem = JSON.parse(evento.data);
-
-
-            // Painel avisou que está pronto
-            if (mensagem.tipo === "painel-pronto") {
-
-                const oferta =
-                    await conexao.createOffer();
-
-                await conexao.setLocalDescription(oferta);
-
-                socket.send(JSON.stringify({
-                    tipo: "oferta",
-                    oferta: oferta
-                }));
-            }
-
-
-            // Recebe resposta do painel
-            if (mensagem.tipo === "resposta") {
-
-                await conexao.setRemoteDescription(
-                    mensagem.resposta
-                );
-            }
-
-
-            // Recebe candidato WebRTC
-            if (mensagem.tipo === "candidato") {
-
-                await conexao.addIceCandidate(
-                    mensagem.candidato
-                );
-            }
-
-
-            // Painel encerrou a transmissão
-            if (mensagem.tipo === "encerrar") {
-
-                if (video.srcObject) {
-
-                    video.srcObject
-                        .getTracks()
-                        .forEach(track => track.stop());
-
-                    video.srcObject = null;
-                }
-
-                status.textContent =
-                    "Transmissão encerrada pelo painel.";
-            }
-
-        };
-
-
-        // Envia informações necessárias para estabelecer
-        // a conexão WebRTC
-        conexao.onicecandidate = (evento) => {
-
-            if (evento.candidate) {
-
-                socket.send(JSON.stringify({
-                    tipo: "candidato",
-                    candidato: evento.candidate
-                }));
-
-            }
-
-        };
-
-
-        // Inicia a câmera
         async function iniciarCamera() {
 
             try {
@@ -133,30 +36,19 @@
 
                 video.srcObject = stream;
 
-
-                // Adiciona a câmera à conexão WebRTC
-                stream.getTracks().forEach((track) => {
-
-                    conexao.addTrack(
-                        track,
-                        stream
-                    );
-
-                });
-
                 status.textContent =
-                    "Câmera autorizada e ativa.";
+                    "Câmera autorizada e funcionando.";
 
             } catch (erro) {
 
                 console.error(erro);
 
                 status.textContent =
-                    "Câmera não autorizada.";
+                    "Permissão da câmera recusada ou indisponível.";
             }
-
         }
 
+        iniciarCamera();
     </script>
 
 </body>
