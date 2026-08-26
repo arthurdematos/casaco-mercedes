@@ -10,49 +10,69 @@ const wss = new WebSocket.Server({
     server
 });
 
+
 let camera = null;
 let painel = null;
 
 
 wss.on("connection", socket => {
 
-    console.log("Cliente conectado.");
+    console.log("Cliente conectado");
 
 
-    socket.on("message", message => {
+    socket.on("message", mensagem => {
 
         let dados;
 
         try {
-            dados = JSON.parse(message.toString());
+
+            dados =
+                JSON.parse(
+                    mensagem.toString()
+                );
+
         } catch {
+
             return;
+
         }
 
 
+        // CELULAR
         if (dados.tipo === "camera") {
 
             camera = socket;
 
-            console.log("Câmera conectada.");
+            console.log(
+                "Câmera conectada"
+            );
+
 
             if (
                 painel &&
                 painel.readyState === WebSocket.OPEN
             ) {
 
-                painel.send(JSON.stringify({
-                    tipo: "camera-pronta"
+                camera.send(JSON.stringify({
+
+                    tipo: "painel-pronto"
+
                 }));
+
             }
+
         }
 
 
+        // PAINEL
         if (dados.tipo === "painel") {
 
             painel = socket;
 
-            console.log("Painel conectado.");
+            console.log(
+                "Painel conectado"
+            );
+
 
             if (
                 camera &&
@@ -60,12 +80,17 @@ wss.on("connection", socket => {
             ) {
 
                 camera.send(JSON.stringify({
+
                     tipo: "painel-pronto"
+
                 }));
+
             }
+
         }
 
 
+        // OFERTA
         if (dados.tipo === "oferta") {
 
             if (
@@ -76,10 +101,13 @@ wss.on("connection", socket => {
                 painel.send(
                     JSON.stringify(dados)
                 );
+
             }
+
         }
 
 
+        // RESPOSTA
         if (dados.tipo === "resposta") {
 
             if (
@@ -90,11 +118,15 @@ wss.on("connection", socket => {
                 camera.send(
                     JSON.stringify(dados)
                 );
+
             }
+
         }
 
 
+        // ICE
         if (dados.tipo === "candidato") {
+
 
             if (
                 socket === camera &&
@@ -105,6 +137,7 @@ wss.on("connection", socket => {
                 painel.send(
                     JSON.stringify(dados)
                 );
+
             }
 
 
@@ -117,10 +150,13 @@ wss.on("connection", socket => {
                 camera.send(
                     JSON.stringify(dados)
                 );
+
             }
+
         }
 
 
+        // ENCERRAR
         if (dados.tipo === "encerrar") {
 
             if (
@@ -129,9 +165,13 @@ wss.on("connection", socket => {
             ) {
 
                 camera.send(JSON.stringify({
+
                     tipo: "encerrar"
+
                 }));
+
             }
+
         }
 
     });
@@ -140,13 +180,24 @@ wss.on("connection", socket => {
     socket.on("close", () => {
 
         if (socket === camera) {
+
             camera = null;
-            console.log("Câmera desconectada.");
+
+            console.log(
+                "Câmera desconectada"
+            );
+
         }
 
+
         if (socket === painel) {
+
             painel = null;
-            console.log("Painel desconectado.");
+
+            console.log(
+                "Painel desconectado"
+            );
+
         }
 
     });
@@ -154,13 +205,18 @@ wss.on("connection", socket => {
 });
 
 
-const PORT = process.env.PORT || 8080;
+const PORT =
+    process.env.PORT || 8080;
 
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
 
-    console.log(
-        `Servidor rodando na porta ${PORT}`
-    );
+        console.log(
+            `Servidor rodando na porta ${PORT}`
+        );
 
-});
+    }
+);
