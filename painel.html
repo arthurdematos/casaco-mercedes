@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -10,219 +12,385 @@
     <title>Painel</title>
 
     <style>
+
         body {
+
             font-family: Arial, sans-serif;
+
             background: #111;
+
             color: white;
+
             text-align: center;
-            padding: 30px;
+
+            padding: 25px;
+
+        }
+
+        .cameras {
+
+            display: flex;
+
+            gap: 20px;
+
+            justify-content: center;
+
+            flex-wrap: wrap;
+
+        }
+
+        .camera {
+
+            background: #222;
+
+            padding: 10px;
+
+            border-radius: 10px;
+
         }
 
         video {
-            width: 90%;
-            max-width: 800px;
+
+            width: 450px;
+
+            max-width: 90vw;
+
             background: black;
+
         }
 
         button {
-            margin: 10px;
+
+            margin-top: 20px;
+
             padding: 12px 20px;
+
             font-size: 16px;
+
             cursor: pointer;
+
         }
+
     </style>
+
 </head>
+
 
 <body>
 
-    <h1>Painel de visualização</h1>
+    <h1>Painel</h1>
 
-    <p id="status">Conectando...</p>
+    <p id="status">
+        Conectando...
+    </p>
 
-    <video
-        id="video"
-        autoplay
-        playsinline>
-    </video>
+
+    <div class="cameras">
+
+        <div class="camera">
+
+            <h2>Câmera frontal</h2>
+
+            <video
+                id="frontVideo"
+                autoplay
+                playsinline>
+            </video>
+
+        </div>
+
+
+        <div class="camera">
+
+            <h2>Câmera traseira</h2>
+
+            <video
+                id="rearVideo"
+                autoplay
+                playsinline>
+            </video>
+
+        </div>
+
+    </div>
+
+
+    <!-- Áudio recebido -->
+
+    <audio
+        id="audio"
+        autoplay>
+    </audio>
+
 
     <br>
 
     <button id="iniciar">
-        Iniciar visualização
+        🔊 Iniciar visualização
     </button>
 
     <button id="encerrar">
-        Encerrar transmissão
+        ⛔ Encerrar transmissão
     </button>
 
-    <script>
 
-        const video =
-            document.getElementById("video");
+<script>
 
-        const status =
-            document.getElementById("status");
+const status =
+    document.getElementById("status");
 
-        const iniciar =
-            document.getElementById("iniciar");
+const frontVideo =
+    document.getElementById("frontVideo");
 
-        const encerrar =
-            document.getElementById("encerrar");
+const rearVideo =
+    document.getElementById("rearVideo");
 
+const audio =
+    document.getElementById("audio");
 
-        const socket = new WebSocket(
-            "wss://casaco-mercedes.onrender.com"
-        );
+const iniciar =
+    document.getElementById("iniciar");
 
-
-        let peer = null;
-
-
-        function criarPeer() {
-
-            peer = new RTCPeerConnection({
-                iceServers: [
-                    {
-                        urls:
-                            "stun:stun.l.google.com:19302"
-                    }
-                ]
-            });
+const encerrar =
+    document.getElementById("encerrar");
 
 
-            peer.ontrack = evento => {
+const socket = new WebSocket(
+    "wss://casaco-mercedes.onrender.com"
+);
 
-                video.srcObject =
-                    evento.streams[0];
+
+let peer = null;
+
+let quantidadeVideos = 0;
+
+
+socket.onopen = () => {
+
+    status.textContent =
+        "Conectado. Aguardando câmera...";
+
+
+    peer = new RTCPeerConnection({
+
+        iceServers: [
+            {
+                urls:
+                    "stun:stun.l.google.com:19302"
+            }
+        ]
+
+    });
+
+
+    peer.ontrack = evento => {
+
+        const track =
+            evento.track;
+
+
+        if (track.kind === "video") {
+
+            quantidadeVideos++;
+
+
+            const stream =
+                new MediaStream([track]);
+
+
+            if (quantidadeVideos === 1) {
+
+                frontVideo.srcObject =
+                    stream;
 
                 status.textContent =
-                    "Transmissão recebida.";
-            };
+                    "Câmera frontal recebida.";
 
+            }
 
-            peer.onicecandidate = evento => {
+            else if (quantidadeVideos === 2) {
 
-                if (evento.candidate) {
+                rearVideo.srcObject =
+                    stream;
 
-                    socket.send(JSON.stringify({
-                        tipo: "candidato",
-                        candidato:
-                            evento.candidate
-                    }));
-                }
-            };
+                status.textContent =
+                    "Câmeras frontal e traseira recebidas.";
+
+            }
+
         }
 
 
-        socket.onopen = () => {
+        if (track.kind === "audio") {
 
-            status.textContent =
-                "Conectado. Aguardando câmera...";
+            const stream =
+                new MediaStream([track]);
 
-            criarPeer();
+            audio.srcObject =
+                stream;
 
-            socket.send(JSON.stringify({
-                tipo: "painel"
-            }));
-        };
+        }
 
-
-        socket.onmessage = async evento => {
-
-            const mensagem =
-                JSON.parse(evento.data);
+    };
 
 
-            if (mensagem.tipo === "oferta") {
+    peer.onicecandidate = evento => {
 
-                await peer.setRemoteDescription(
-                    mensagem.oferta
-                );
-
-
-                const resposta =
-                    await peer.createAnswer();
-
-
-                await peer.setLocalDescription(
-                    resposta
-                );
-
-
-                socket.send(JSON.stringify({
-                    tipo: "resposta",
-                    resposta:
-                        peer.localDescription
-                }));
-            }
-
-
-            if (mensagem.tipo === "candidato") {
-
-                try {
-
-                    await peer.addIceCandidate(
-                        mensagem.candidato
-                    );
-
-                } catch (erro) {
-
-                    console.error(erro);
-                }
-            }
-        };
-
-
-        iniciar.onclick = async () => {
-
-            try {
-
-                await video.play();
-
-                status.textContent =
-                    "Visualização iniciada.";
-
-            } catch (erro) {
-
-                console.error(erro);
-
-                status.textContent =
-                    "Clique novamente para iniciar.";
-            }
-        };
-
-
-        encerrar.onclick = () => {
+        if (evento.candidate) {
 
             socket.send(JSON.stringify({
-                tipo: "encerrar"
+
+                tipo: "candidato",
+
+                candidato:
+                    evento.candidate
+
             }));
 
-            if (peer) {
-                peer.close();
-            }
+        }
 
-            video.srcObject = null;
-
-            status.textContent =
-                "Transmissão encerrada.";
-        };
+    };
 
 
-        socket.onerror = () => {
+    socket.send(JSON.stringify({
 
-            status.textContent =
-                "Erro ao conectar ao servidor.";
-        };
+        tipo: "painel"
+
+    }));
+
+};
 
 
-        socket.onclose = () => {
+socket.onmessage = async evento => {
 
-            status.textContent =
-                "Servidor desconectado.";
-        };
+    const mensagem =
+        JSON.parse(evento.data);
 
-    </script>
+
+    if (mensagem.tipo === "oferta") {
+
+        await peer.setRemoteDescription(
+            mensagem.oferta
+        );
+
+
+        const resposta =
+            await peer.createAnswer();
+
+
+        await peer.setLocalDescription(
+            resposta
+        );
+
+
+        socket.send(JSON.stringify({
+
+            tipo: "resposta",
+
+            resposta:
+                peer.localDescription
+
+        }));
+
+    }
+
+
+    if (mensagem.tipo === "candidato") {
+
+        try {
+
+            await peer.addIceCandidate(
+                mensagem.candidato
+            );
+
+        } catch (erro) {
+
+            console.error(erro);
+
+        }
+
+    }
+
+};
+
+
+iniciar.onclick = async () => {
+
+    try {
+
+        await frontVideo.play();
+
+        await rearVideo.play();
+
+        await audio.play();
+
+        status.textContent =
+            "Visualização e áudio iniciados.";
+
+    } catch (erro) {
+
+        console.error(erro);
+
+        status.textContent =
+            "Clique novamente para iniciar o áudio.";
+
+    }
+
+};
+
+
+encerrar.onclick = () => {
+
+    socket.send(JSON.stringify({
+
+        tipo: "encerrar"
+
+    }));
+
+
+    if (peer) {
+
+        peer.close();
+
+    }
+
+
+    frontVideo.srcObject = null;
+
+    rearVideo.srcObject = null;
+
+    audio.srcObject = null;
+
+
+    status.textContent =
+        "Transmissão encerrada.";
+
+};
+
+
+socket.onerror = () => {
+
+    status.textContent =
+        "Erro ao conectar ao servidor.";
+
+};
+
+
+socket.onclose = () => {
+
+    if (
+        !status.textContent.includes("encerrada")
+    ) {
+
+        status.textContent =
+            "Servidor desconectado.";
+
+    }
+
+};
+
+</script>
 
 </body>
+
 </html>
